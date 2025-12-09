@@ -7,6 +7,7 @@ from index_direction import handle_index_direction
 from index_play_pause import handle_index_play_pause
 from zoom_inout import handle_zoom
 from fist_speed_control import handle_fist_speed
+from meidas_touch import is_meidas_touch
 
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
@@ -16,6 +17,9 @@ cap = cv2.VideoCapture(0)
 prev_gesture = None
 cooldown = 1.0
 last_time = time.time()
+unlock = False
+available_time = 2.0
+set_time = time.time()
 
 def finger_extended(lm, tip, pip, thresh=0.1):
     """手指是否伸出，不看方向，只看距離"""
@@ -71,11 +75,17 @@ while True:
             pose = classify_static_pose(lm)
             # print("Detected pose:", pose)
 
-            handle_index_direction(lm, pose)
-            handle_index_play_pause(lm)
-            handle_fist_speed(lm)
-            handle_zoom(lm, pose)
-            
+            if(unlock and last_time - set_time > available_time):
+                unlock = False
+            if(unlock):
+                handle_index_direction(lm, pose)
+                handle_index_play_pause(lm)
+                handle_fist_speed(lm)
+                handle_zoom(lm, pose)
+            elif(is_meidas_touch(lm)):
+                unlock = True
+                set_time = time.time()
+
 
     cv2.imshow('Gesture Control', frame)
     if cv2.waitKey(5) & 0xFF == 27:
