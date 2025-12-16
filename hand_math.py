@@ -18,6 +18,17 @@ def get_angle(a, b, c):
 def get_distance(p1, p2):
     return math.hypot(p1.x - p2.x, p1.y - p2.y)
 
+# def is_finger_straight(lm, tips, pips, mcps, idx, threshold=100):
+#     if idx == 0: # 拇指
+#         angle = get_angle(lm[2], lm[3], lm[4])
+#         return angle > threshold
+#     tip = lm[tips[idx]]
+#     pip = lm[pips[idx]]
+#     mcp = lm[mcps[idx]]
+#     angle = get_angle(mcp, pip, tip)
+#     # print(idx, " ", angle)
+#     return angle > threshold
+
 def is_finger_straight(lm, tips, pips, mcps, idx, threshold=150):
     if idx == 0: # 拇指
         angle = get_angle(lm[2], lm[3], lm[4])
@@ -25,8 +36,8 @@ def is_finger_straight(lm, tips, pips, mcps, idx, threshold=150):
     tip = lm[tips[idx]]
     pip = lm[pips[idx]]
     mcp = lm[mcps[idx]]
-    angle = get_angle(mcp, pip, tip)
-    return angle > threshold
+    # print(mcp.y - pip.y, pip.y - tip.y)
+    return mcp.y > pip.y and pip.y > tip.y
 
 # --- 新增/修改的核心判斷 ---
 

@@ -70,10 +70,10 @@ class GestureController:
             
             # 判斷手心是否朝向鏡頭 (利用 Thumb/Pinky 相對位置)
             # 點擊時，通常手背不會朝自己，所以適用 Facing Down/Camera 的邏輯 (拇指在內側)
-            is_facing_front = hand_math.is_palm_facing_down_or_camera(lm, handedness_label)
+            # is_facing_front = hand_math.is_palm_facing_down_or_camera(lm, handedness_label)
 
             # --- 1. 點擊 (垂直 + 手心朝鏡頭 + 下壓) ---
-            if is_vertical and is_facing_front:
+            if is_vertical and lm[4].x > lm[3].x:
                 self.pointing_mode = True
                 if self.prev_index_y is not None:
                     dy = index_tip.y - self.prev_index_y
@@ -105,7 +105,7 @@ class GestureController:
         # 動作 B: 縮放 (槍手勢)
         # -------------------------------------------------------------------
         is_gun = fingers_up[0] and fingers_up[1] and not fingers_up[2] and not fingers_up[3] and not fingers_up[4]
-        if is_gun:
+        if is_gun and lm[4].x < lm[3].x:
             curr_dist = hand_math.get_distance(lm[4], lm[8])
             if self.prev_pinch_dist:
                 delta = curr_dist - self.prev_pinch_dist
@@ -157,7 +157,7 @@ class GestureController:
                 if abs(move_x) > 0.01 or abs(move_y) > 0.01:
                     is_moving = True
             
-            MOVE_THRESH = 0.035
+            MOVE_THRESH = 0.025
 
             # --- 3. 音量變大 (手心向上 + 往上移) ---
             if is_up:
