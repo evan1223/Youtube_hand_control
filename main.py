@@ -1,45 +1,73 @@
-# main.py
 import cv2
-import config
-from hand_tracking import HandDetector
-from gesture_action import GestureController
+import mediapipe as mp
+import time
+from gesture_logic import GestureController
 
 def main():
-    # 初始化
-    cap = cv2.VideoCapture(0)
-    cap.set(3, config.CAM_WIDTH)
-    cap.set(4, config.CAM_HEIGHT)
-    
-    detector = HandDetector()
+    # 初始化 MediaPipe
+    mp_hands = mp.solutions.hands
+    mp_drawing = mp.solutions.drawing_utils
+    hands = mp_hands.Hands(
+        max_num_hands=1,  # 建議先單手，避免邏輯打架，若需雙手可改為 2
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.7
+    )
+
+    # 初始化控制器
     controller = GestureController()
     
-    print("系統啟動... 按 'q' 結束")
+    cap = cv2.VideoCapture(0)
+    
+    print("=== YouTube 手勢控制系統啟動 ===")
+    print("1. ☝️ + 點擊 : 播放/暫停")
+    print("2. ☝️ 左右指 : 快轉/倒退")
+    print("3. 🔫 距離變大/小 : 全螢幕切換")
+    print("4. ✊ 握拳 2秒 : 倍速切換")
+    print("5. ✋ 左右揮 : 上/下一部影片 (分左右手)")
+    print("6. ✋ 上下移 : 音量控制")
+    print("7. ✋ 靜止 2秒 : 靜音切換")
+    print("================================")
 
     while True:
-        success, img = cap.read()
-        if not success: break
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        # 影像前處理
+        frame = cv2.flip(frame, 1) # 鏡像
+        h, w, c = frame.shape
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # 翻轉影像 (鏡像)
-        img = cv2.flip(img, 1)
+        results = hands.process(rgb_frame)
         
-        # 1. 偵測手部
-        img, results = detector.find_hands(img)
-        
-        # 2. 處理每一隻手
+        # 顯示冷卻狀態
+        elapsed = time.time() - controller.last_action_time
+        if elapsed < controller.cooldown:
+            cv2.putText(frame, f"COOLDOWN ({1.0 - elapsed:.1f}s)", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        else:
+            cv2.putText(frame, "READY", (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
         if results.multi_hand_landmarks:
-            for i in range(len(results.multi_hand_landmarks)):
-                # 獲取該手部的座標與標籤
-                lm_list, label = detector.get_hand_info(img, i)
+            for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
+                # 繪製骨架
+                mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 
-                # 3. 判斷手勢並執行
-                feedback_text = controller.process_gesture(i, label, lm_list, img)
+                # 取得左右手標籤
+                handedness = results.multi_handedness[idx].classification[0].label
                 
-                # 4. 如果有觸發動作，顯示在畫面上
-                if feedback_text:
-                    cv2.putText(img, feedback_text, (50, 50 + i*50), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    
-        cv2.imshow("Hand Gesture Controller", img)
+                # 處理手勢邏輯
+                status = controller.process(hand_landmarks.landmark, handedness)
+                
+                # 在手上顯示目前狀態 (除錯用)
+                wrist = hand_landmarks.landmark[0]
+                cx, cy = int(wrist.x * w), int(wrist.y * h)
+                cv2.putText(frame, handedness, (cx, cy - 20), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+        cv2.imshow('Gesture Control', frame)
+        
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
             
