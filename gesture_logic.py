@@ -6,6 +6,12 @@ class GestureController:
     def __init__(self):
         self.last_action_time = 0
         self.cooldown = 1.0
+        self.index_time = None
+        self.gun_time = None
+        self.palm_time = None
+        self.index_check = 0 # 0閒置 1偵測中 2成功
+        self.gun_check = 0 # 0閒置 1偵測中 2成功
+        self.palm_check = 0 # 0閒置 1偵測中 2成功
         
         # 狀態變數
         self.prev_wrist_x = None
@@ -58,9 +64,20 @@ class GestureController:
         # -------------------------------------------------------------------
         # 動作 A: 食指類 (點擊 / 快轉)
         # -------------------------------------------------------------------
+        # print(self.index_check, " ", self.index_time, " ", current_time)
         is_index_only = fingers_up[1] and not fingers_up[2] and not fingers_up[3] and not fingers_up[4]
+        if is_index_only and self.index_check == 0:
+            self.index_time = time.time()
+            self.index_check = 1
         
-        if is_index_only:
+        if is_index_only and self.index_check == 1 and self.index_time and current_time - self.index_time > 0.5:
+            self.index_check = 2
+
+        if not is_index_only:
+            self.index_check = 0
+            self.index_time = None
+
+        if is_index_only and self.index_check == 2:
             # 判斷食指方向
             diff_x = abs(index_tip.x - index_mcp.x)
             diff_y = abs(index_tip.y - index_mcp.y)
@@ -79,6 +96,8 @@ class GestureController:
                     dy = index_tip.y - self.prev_index_y
                     if dy > 0.03: # 下壓
                         self.execute_action("播放/暫停", "k")
+                        self.index_check = 0
+                        self.index_time = None
                         return
                 self.prev_index_y = index_tip.y
                 
@@ -90,9 +109,13 @@ class GestureController:
                 dx_finger = index_tip.x - index_mcp.x
                 if handedness_label == "Right" and dx_finger > 0.05:
                     self.execute_action("快轉 5 秒", "right")
+                    self.index_check = 0
+                    self.index_time = None
                     return
                 elif handedness_label == "Left" and dx_finger < -0.05:
                     self.execute_action("倒退 5 秒", "left")
+                    self.index_check = 0
+                    self.index_time = None
                     return
             else:
                 self.pointing_mode = False
@@ -105,15 +128,30 @@ class GestureController:
         # 動作 B: 縮放 (槍手勢)
         # -------------------------------------------------------------------
         is_gun = fingers_up[0] and fingers_up[1] and not fingers_up[2] and not fingers_up[3] and not fingers_up[4]
-        if is_gun and lm[4].x < lm[3].x:
+        if is_gun and lm[4].x < lm[3].x and self.gun_check == 0:
+            self.gun_time = time.time()
+            self.gun_check = 1
+
+        if is_gun and lm[4].x < lm[3].x and self.gun_check == 1 and self.gun_time and current_time - self.gun_time > 0.5:
+            self.gun_check = 2
+
+        if not is_gun or not(lm[4].x < lm[3].x):
+            self.gun_check = 0
+            self.gun_time = None
+
+        if is_gun and lm[4].x < lm[3].x and self.gun_check == 2:
             curr_dist = hand_math.get_distance(lm[4], lm[8])
             if self.prev_pinch_dist:
                 delta = curr_dist - self.prev_pinch_dist
                 if delta > 0.015: 
                     self.execute_action("放大螢幕", "f")
+                    self.gun_check = 0
+                    self.gun_time = None
                     return
                 elif delta < -0.015:
                     self.execute_action("縮小螢幕", "f")
+                    self.gun_check = 0
+                    self.gun_time = None
                     return
             self.prev_pinch_dist = curr_dist
         else:
@@ -139,8 +177,18 @@ class GestureController:
         # 動作 D: 手掌類 (Open Palm) - 音量 / 靜音 / 換片
         # -------------------------------------------------------------------
         is_palm_open = all(fingers_up)
+        if is_palm_open and self.palm_check == 0:
+            self.palm_time = time.time()
+            self.palm_check = 1
         
-        if is_palm_open:
+        if is_palm_open and self.palm_check == 1 and self.palm_time and current_time - self.palm_time > 0.7:
+            self.palm_check = 2
+
+        if not is_palm_open:
+            self.palm_check = 0
+            self.palm_time = None
+        
+        if is_palm_open and self.palm_check == 2:
             # 1. 判斷手掌姿態
             is_up = hand_math.is_palm_facing_up(lm, handedness_label)           # 手心向上 (Thumb外側)
             is_down_cam = hand_math.is_palm_facing_down_or_camera(lm, handedness_label) # 手心向下/鏡頭 (Thumb內側)
@@ -181,7 +229,7 @@ class GestureController:
             if is_down_cam and not is_moving:
                 if self.mute_start_time is None:
                     self.mute_start_time = current_time
-                elif current_time - self.mute_start_time > 2.0:
+                elif current_time - self.mute_start_time > 1.3:
                     self.execute_action("靜音切換", "m")
                     return
             else:
